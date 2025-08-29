@@ -17,12 +17,12 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Detectar si es móvil
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  // Inicializar cámaras
   const initCamera = async () => {
     try {
-      // Pedir permiso a la cámara
+      // Pedir permiso a la cámara sin seleccionar deviceId
       const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
       tempStream.getTracks().forEach(track => track.stop());
 
@@ -34,13 +34,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       setDevices(videoDevices);
 
       if (isMobile) {
-        // Móvil: seleccionar automáticamente trasera
-        const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
-        setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
-        // Iniciar cámara automáticamente
-        setTimeout(() => startCamera(), 100);
+        // Móvil: usar facingMode "environment" directamente
+        setSelectedDevice(null);
+        startCamera(true);
       } else {
-        // Desktop: seleccionar la primera disponible
+        // Desktop: seleccionar la primera cámara disponible
         setSelectedDevice(videoDevices[0]?.deviceId || null);
       }
     } catch (err) {
@@ -53,14 +51,15 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     initCamera();
   }, []);
 
-  const startCamera = async () => {
-    if (!selectedDevice) return alert("Selecciona una cámara primero");
+  const startCamera = async (useRearCamera = false) => {
     stopCamera();
 
     try {
-      const constraints = isMobile
-        ? { video: { facingMode: "environment" } } // móvil usa trasera
-        : { video: { deviceId: { exact: selectedDevice } } }; // desktop usa selección
+      const constraints = isMobile && useRearCamera
+        ? { video: { facingMode: { ideal: "environment" } } } // móvil trasera
+        : selectedDevice
+        ? { video: { deviceId: { exact: selectedDevice } } } // desktop
+        : { video: true }; // fallback
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
@@ -129,7 +128,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
       <div className="flex gap-2 mt-2">
         <button
-          onClick={startCamera}
+          onClick={() => startCamera()}
           className="bg-blue-500 text-white px-4 py-2 rounded"
         >
           Iniciar cámara
