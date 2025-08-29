@@ -22,7 +22,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   // Inicializar cámaras
   const initCamera = async () => {
     try {
-      // Pedir permiso a la cámara sin seleccionar deviceId
       const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
       tempStream.getTracks().forEach(track => track.stop());
 
@@ -34,9 +33,9 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       setDevices(videoDevices);
 
       if (isMobile) {
-        // Móvil: usar facingMode "environment" directamente
+        // Móvil: usar facingMode trasera automáticamente
         setSelectedDevice(null);
-        startCamera(true);
+        setTimeout(() => startCamera(true), 100);
       } else {
         // Desktop: seleccionar la primera cámara disponible
         setSelectedDevice(videoDevices[0]?.deviceId || null);
@@ -56,10 +55,10 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     try {
       const constraints = isMobile && useRearCamera
-        ? { video: { facingMode: { ideal: "environment" } } } // móvil trasera
+        ? { video: { facingMode: { ideal: "environment" } } }
         : selectedDevice
-        ? { video: { deviceId: { exact: selectedDevice } } } // desktop
-        : { video: true }; // fallback
+        ? { video: { deviceId: { exact: selectedDevice } } }
+        : { video: true };
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
@@ -80,24 +79,27 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
-
     const video = videoRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
+    // Tamaño máximo
+    const maxWidth = 800;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+    // Reducir calidad para menor tamaño
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
       onCapture(blob);
-    }, "image/jpeg");
+    }, "image/jpeg", 0.8);
   };
 
   const stopCamera = () => {
