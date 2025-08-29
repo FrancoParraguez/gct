@@ -9,12 +9,20 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   const startCamera = async () => {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    if (videoRef.current) {
-      videoRef.current.srcObject = mediaStream;
-      videoRef.current.play();
+    try {
+      // Intentar usar solo la cámara trasera
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        videoRef.current.play();
+      }
+      setStream(mediaStream);
+    } catch (err) {
+      console.error("No se pudo iniciar la cámara trasera:", err);
+      alert("No se pudo acceder a la cámara trasera del dispositivo.");
     }
-    setStream(mediaStream);
   };
 
   const capturePhoto = () => {
