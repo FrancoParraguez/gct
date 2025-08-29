@@ -33,7 +33,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       setDevices(videoDevices);
 
       if (isMobile) {
-        // Móvil: usar facingMode trasera automáticamente
+        // Móvil: usar cámara trasera automáticamente
         setSelectedDevice(null);
         setTimeout(() => startCamera(true), 100);
       } else {
@@ -82,7 +82,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     const video = videoRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    // Tamaño máximo
+    // Tamaño máximo para reducir peso
     const maxWidth = 800;
     const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
@@ -94,7 +94,16 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Reducir calidad para menor tamaño
+    // Convertir a escala de grises
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+      data[i] = data[i+1] = data[i+2] = gray;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // Crear blob con calidad 0.8 para menor peso
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
