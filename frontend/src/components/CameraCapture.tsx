@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 interface CameraCaptureProps {
-  onCapture?: (imageData: string) => void; // opcional
+  onCapture?: (imageBlob: Blob) => Promise<void>; // función async que recibe Blob
 }
 
 interface CameraDevice {
@@ -12,12 +12,12 @@ interface CameraDevice {
 export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedImageURL, setCapturedImageURL] = useState<string | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Listar cámaras y seleccionar trasera si existe
+  // Listar cámaras y seleccionar automáticamente trasera si existe
   const listCameras = async () => {
     const mediaDevices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = mediaDevices
@@ -26,7 +26,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     setDevices(videoDevices);
 
-    // Selección automática de trasera
     const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
     setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
   };
@@ -59,7 +58,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     }
   };
 
-  // Capturar foto y mostrar / enviar al backend
+  // Capturar foto
   const capturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -77,17 +76,23 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL("image/jpeg");
 
-    setCapturedImage(imageData); // Mostrar en pantalla
+    // Convertir a Blob
+    canvas.toBlob(async blob => {
+      if (!blob) return;
+      // Mostrar en pantalla
+      const imageURL = URL.createObjectURL(blob);
+      setCapturedImageURL(imageURL);
 
-    if (onCapture) {
-      try {
-        await onCapture(imageData); // Enviar al componente padre / backend
-      } catch (err) {
-        console.error("Error enviando imagen al backend:", err);
+      // Enviar al backend
+      if (onCapture) {
+        try {
+          await onCapture(blob);
+        } catch (err) {
+          console.error("Error enviando imagen al backend:", err);
+        }
       }
-    }
+    }, "image/jpeg", 0.9); // calidad 90%
   };
 
   const stopCamera = () => {
@@ -133,11 +138,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
         </button>
       </div>
 
-      {capturedImage && (
+      {capturedImageURL && (
         <div className="mt-4">
           <p className="text-center font-semibold">Captura realizada:</p>
           <img
-            src={capturedImage}
+            src={capturedImageURL}
             alt="Captura"
             className="border rounded w-full max-w-md"
           />
