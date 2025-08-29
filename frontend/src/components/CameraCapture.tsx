@@ -17,10 +17,12 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Pedir permiso primero y luego listar cámaras
+  // Detectar si es móvil
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const initCamera = async () => {
     try {
-      // Acceso a cámara sin especificar deviceId
+      // Pedir permiso a la cámara
       const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
       tempStream.getTracks().forEach(track => track.stop());
 
@@ -31,8 +33,16 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
       setDevices(videoDevices);
 
-      const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
-      setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
+      if (isMobile) {
+        // Móvil: seleccionar automáticamente trasera
+        const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
+        setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
+        // Iniciar cámara automáticamente
+        setTimeout(() => startCamera(), 100);
+      } else {
+        // Desktop: seleccionar la primera disponible
+        setSelectedDevice(videoDevices[0]?.deviceId || null);
+      }
     } catch (err) {
       console.error("No se pudo acceder a la cámara:", err);
       alert("No se pudo acceder a la cámara del dispositivo.");
@@ -45,13 +55,15 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   const startCamera = async () => {
     if (!selectedDevice) return alert("Selecciona una cámara primero");
-
     stopCamera();
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: selectedDevice } },
-      });
+      const constraints = isMobile
+        ? { video: { facingMode: "environment" } } // móvil usa trasera
+        : { video: { deviceId: { exact: selectedDevice } } }; // desktop usa selección
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
@@ -59,6 +71,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
           setCameraReady(true);
         };
       }
+
       setStream(mediaStream);
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
@@ -80,6 +93,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
@@ -97,14 +111,16 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {devices.length > 0 && (
+      {!isMobile && devices.length > 0 && (
         <select
           value={selectedDevice || ""}
           onChange={e => setSelectedDevice(e.target.value)}
           className="border rounded px-2 py-1 mb-2"
         >
           {devices.map(d => (
-            <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label}
+            </option>
           ))}
         </select>
       )}
@@ -136,7 +152,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       {capturedImage && (
         <div className="mt-4">
           <p className="text-center font-semibold">Captura realizada:</p>
-          <img src={capturedImage} alt="Captura" className="border rounded w-full max-w-md" />
+          <img
+            src={capturedImage}
+            alt="Captura"
+            className="border rounded w-full max-w-md"
+          />
         </div>
       )}
     </div>
