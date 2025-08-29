@@ -16,10 +16,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  // Inicializar cámaras
+  // Inicializar cámaras automáticamente
   const initCamera = async () => {
     try {
       const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -33,12 +34,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       setDevices(videoDevices);
 
       if (isMobile) {
-        // Móvil: usar cámara trasera automáticamente
         setSelectedDevice(null);
-        setTimeout(() => startCamera(true), 100);
+        setTimeout(() => startCamera(true), 100); // cámara trasera
       } else {
-        // Desktop: seleccionar la primera cámara disponible
         setSelectedDevice(videoDevices[0]?.deviceId || null);
+        startCamera(); // iniciar cámara de escritorio automáticamente
       }
     } catch (err) {
       console.error("No se pudo acceder a la cámara:", err);
@@ -71,6 +71,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       }
 
       setStream(mediaStream);
+      setPaused(false);
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
       alert("No se pudo iniciar la cámara seleccionada.");
@@ -82,12 +83,9 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     const video = videoRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    // Tamaño máximo para reducir peso
-    const maxWidth = 800;
-    const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth * scale;
-    canvas.height = video.videoHeight * scale;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -103,18 +101,30 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     }
     ctx.putImageData(imageData, 0, 0);
 
-    // Crear blob con calidad 0.8 para menor peso
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
       onCapture(blob);
-    }, "image/jpeg", 0.8);
+    }, "image/jpeg", 1.0);
   };
 
   const stopCamera = () => {
     if (stream) stream.getTracks().forEach(track => track.stop());
     setStream(null);
     setCameraReady(false);
+    setPaused(false);
+  };
+
+  const togglePause = () => {
+    if (!videoRef.current) return;
+
+    if (!paused) {
+      videoRef.current.pause();
+      setPaused(true);
+    } else {
+      videoRef.current.play();
+      setPaused(false);
+    }
   };
 
   useEffect(() => stopCamera, []);
@@ -139,12 +149,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
       <div className="flex gap-2 mt-2">
         <button
-          onClick={() => startCamera()}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Iniciar cámara
-        </button>
-        <button
           onClick={capturePhoto}
           disabled={!cameraReady}
           className="bg-green-500 text-white px-4 py-2 rounded disabled:opacity-50"
@@ -152,10 +156,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
           Capturar
         </button>
         <button
-          onClick={stopCamera}
-          className="bg-red-500 text-white px-4 py-2 rounded"
+          onClick={togglePause}
+          disabled={!cameraReady}
+          className="bg-yellow-500 text-white px-4 py-2 rounded disabled:opacity-50"
         >
-          Detener
+          {paused ? "Reanudar" : "Pausar"}
         </button>
       </div>
 
