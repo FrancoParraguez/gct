@@ -17,34 +17,41 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Listar cámaras disponibles
-  const listCameras = async () => {
-    const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = mediaDevices
-      .filter(d => d.kind === "videoinput")
-      .map(d => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId}` }));
+  // Pedir permiso primero y luego listar cámaras
+  const initCamera = async () => {
+    try {
+      // Acceso a cámara sin especificar deviceId
+      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      tempStream.getTracks().forEach(track => track.stop());
 
-    setDevices(videoDevices);
+      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = mediaDevices
+        .filter(d => d.kind === "videoinput")
+        .map(d => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId}` }));
 
-    // Seleccionar automáticamente trasera si existe
-    const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
-    setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
+      setDevices(videoDevices);
+
+      const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
+      setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
+    } catch (err) {
+      console.error("No se pudo acceder a la cámara:", err);
+      alert("No se pudo acceder a la cámara del dispositivo.");
+    }
   };
 
   useEffect(() => {
-    listCameras();
+    initCamera();
   }, []);
 
-  // Iniciar cámara
   const startCamera = async () => {
-    stopCamera();
     if (!selectedDevice) return alert("Selecciona una cámara primero");
+
+    stopCamera();
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: selectedDevice } },
       });
-
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
@@ -52,23 +59,18 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
           setCameraReady(true);
         };
       }
-
       setStream(mediaStream);
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
-      alert("No se pudo acceder a la cámara seleccionada.");
+      alert("No se pudo iniciar la cámara seleccionada.");
     }
   };
 
-  // Capturar foto
   const capturePhoto = () => {
     if (!videoRef.current) return;
-    const video = videoRef.current;
 
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      alert("La cámara aún no está lista, intenta de nuevo.");
-      return;
-    }
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
@@ -78,7 +80,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
@@ -86,7 +87,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     }, "image/jpeg");
   };
 
-  // Detener cámara
   const stopCamera = () => {
     if (stream) stream.getTracks().forEach(track => track.stop());
     setStream(null);
@@ -104,9 +104,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
           className="border rounded px-2 py-1 mb-2"
         >
           {devices.map(d => (
-            <option key={d.deviceId} value={d.deviceId}>
-              {d.label}
-            </option>
+            <option key={d.deviceId} value={d.deviceId}>{d.label}</option>
           ))}
         </select>
       )}
@@ -138,11 +136,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       {capturedImage && (
         <div className="mt-4">
           <p className="text-center font-semibold">Captura realizada:</p>
-          <img
-            src={capturedImage}
-            alt="Captura"
-            className="border rounded w-full max-w-md"
-          />
+          <img src={capturedImage} alt="Captura" className="border rounded w-full max-w-md" />
         </div>
       )}
     </div>
