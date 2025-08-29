@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 interface CameraCaptureProps {
-  onCapture: (imageData: string) => void;
+  onCapture?: (imageData: string) => void; // opcional
 }
 
 interface CameraDevice {
@@ -17,7 +17,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Listar cámaras y seleccionar automáticamente la trasera si existe
+  // Listar cámaras y seleccionar trasera si existe
   const listCameras = async () => {
     const mediaDevices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = mediaDevices
@@ -26,10 +26,8 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     setDevices(videoDevices);
 
-    // Selección automática: trasera si existe, si no la primera disponible
-    const rearCamera = videoDevices.find(d =>
-      /back|rear|environment/i.test(d.label)
-    );
+    // Selección automática de trasera
+    const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
     setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
   };
 
@@ -40,12 +38,10 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   // Iniciar cámara
   const startCamera = async () => {
     stopCamera();
+    if (!selectedDevice) return alert("Selecciona una cámara primero");
 
     try {
-      const constraints = selectedDevice
-        ? { video: { deviceId: { exact: selectedDevice } } }
-        : { video: true }; // fallback a primera cámara disponible
-
+      const constraints = { video: { deviceId: { exact: selectedDevice } } };
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
       if (videoRef.current) {
@@ -55,15 +51,16 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
           setCameraReady(true);
         };
       }
+
       setStream(mediaStream);
     } catch (err) {
-      console.error("Error al iniciar la cámara:", err);
-      alert("No se pudo acceder a la cámara disponible.");
+      console.error("Error al iniciar cámara:", err);
+      alert("No se pudo acceder a la cámara seleccionada.");
     }
   };
 
-  // Capturar foto
-  const capturePhoto = () => {
+  // Capturar foto y mostrar / enviar al backend
+  const capturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
 
@@ -81,18 +78,24 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL("image/jpeg");
-    setCapturedImage(imageData);
-    onCapture(imageData);
+
+    setCapturedImage(imageData); // Mostrar en pantalla
+
+    if (onCapture) {
+      try {
+        await onCapture(imageData); // Enviar al componente padre / backend
+      } catch (err) {
+        console.error("Error enviando imagen al backend:", err);
+      }
+    }
   };
 
-  // Detener cámara
   const stopCamera = () => {
     if (stream) stream.getTracks().forEach(track => track.stop());
     setStream(null);
     setCameraReady(false);
   };
 
-  // Cleanup al desmontar
   useEffect(() => stopCamera, []);
 
   return (
@@ -115,10 +118,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       <video ref={videoRef} className="border rounded w-full max-w-md" autoPlay />
 
       <div className="flex gap-2 mt-2">
-        <button
-          onClick={startCamera}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
+        <button onClick={startCamera} className="bg-blue-500 text-white px-4 py-2 rounded">
           Iniciar cámara
         </button>
         <button
@@ -128,10 +128,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
         >
           Capturar
         </button>
-        <button
-          onClick={stopCamera}
-          className="bg-red-500 text-white px-4 py-2 rounded"
-        >
+        <button onClick={stopCamera} className="bg-red-500 text-white px-4 py-2 rounded">
           Detener
         </button>
       </div>
