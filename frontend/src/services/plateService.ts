@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "https://gct-rjuc.onrender.com/api";
 
 export interface PlateData {
   plate: string;
