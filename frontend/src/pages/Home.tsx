@@ -7,10 +7,16 @@ import type { PlateData } from "../services/plateService";
 export default function Home() {
   const [plateData, setPlateData] = useState<PlateData | null>(null);
 
-  const handleCapture = async (imageData: string) => {
+  const handleCapture = async (imageBlob: Blob) => {
     try {
-      const result = await checkPlate(imageData);
-      setPlateData(result);
+      // Convertir a base64 para enviar al backend
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const result = await checkPlate(base64data);
+        setPlateData(result);
+      };
+      reader.readAsDataURL(imageBlob);
     } catch (error) {
       console.error("Error verificando patente:", error);
     }

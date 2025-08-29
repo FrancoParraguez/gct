@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 interface CameraCaptureProps {
-  onCapture?: (imageBlob: Blob) => Promise<void>; // función async que recibe Blob
+  onCapture: (imageBlob: Blob) => void;
 }
 
 interface CameraDevice {
@@ -12,12 +12,12 @@ interface CameraDevice {
 export default function CameraCapture({ onCapture }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [capturedImageURL, setCapturedImageURL] = useState<string | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
 
-  // Listar cámaras y seleccionar automáticamente trasera si existe
+  // Listar cámaras disponibles
   const listCameras = async () => {
     const mediaDevices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = mediaDevices
@@ -26,6 +26,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     setDevices(videoDevices);
 
+    // Seleccionar automáticamente trasera si existe
     const rearCamera = videoDevices.find(d => /back|rear|environment/i.test(d.label));
     setSelectedDevice(rearCamera?.deviceId || videoDevices[0]?.deviceId || null);
   };
@@ -40,8 +41,9 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     if (!selectedDevice) return alert("Selecciona una cámara primero");
 
     try {
-      const constraints = { video: { deviceId: { exact: selectedDevice } } };
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: selectedDevice } },
+      });
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -53,13 +55,13 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
       setStream(mediaStream);
     } catch (err) {
-      console.error("Error al iniciar cámara:", err);
+      console.error("Error al iniciar la cámara:", err);
       alert("No se pudo acceder a la cámara seleccionada.");
     }
   };
 
   // Capturar foto
-  const capturePhoto = async () => {
+  const capturePhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
 
@@ -77,24 +79,14 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Convertir a Blob
-    canvas.toBlob(async blob => {
+    canvas.toBlob(blob => {
       if (!blob) return;
-      // Mostrar en pantalla
-      const imageURL = URL.createObjectURL(blob);
-      setCapturedImageURL(imageURL);
-
-      // Enviar al backend
-      if (onCapture) {
-        try {
-          await onCapture(blob);
-        } catch (err) {
-          console.error("Error enviando imagen al backend:", err);
-        }
-      }
-    }, "image/jpeg", 0.9); // calidad 90%
+      setCapturedImage(URL.createObjectURL(blob));
+      onCapture(blob);
+    }, "image/jpeg");
   };
 
+  // Detener cámara
   const stopCamera = () => {
     if (stream) stream.getTracks().forEach(track => track.stop());
     setStream(null);
@@ -105,7 +97,6 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Selector de cámara */}
       {devices.length > 0 && (
         <select
           value={selectedDevice || ""}
@@ -123,7 +114,10 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       <video ref={videoRef} className="border rounded w-full max-w-md" autoPlay />
 
       <div className="flex gap-2 mt-2">
-        <button onClick={startCamera} className="bg-blue-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={startCamera}
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+        >
           Iniciar cámara
         </button>
         <button
@@ -133,16 +127,19 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
         >
           Capturar
         </button>
-        <button onClick={stopCamera} className="bg-red-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={stopCamera}
+          className="bg-red-500 text-white px-4 py-2 rounded"
+        >
           Detener
         </button>
       </div>
 
-      {capturedImageURL && (
+      {capturedImage && (
         <div className="mt-4">
           <p className="text-center font-semibold">Captura realizada:</p>
           <img
-            src={capturedImageURL}
+            src={capturedImage}
             alt="Captura"
             className="border rounded w-full max-w-md"
           />
