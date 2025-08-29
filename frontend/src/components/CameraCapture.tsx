@@ -101,11 +101,12 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     }
     ctx.putImageData(imageData, 0, 0);
 
+    // Crear blob con calidad reducida para menor peso
     canvas.toBlob(blob => {
       if (!blob) return;
       setCapturedImage(URL.createObjectURL(blob));
       onCapture(blob);
-    }, "image/jpeg", 1.0);
+    }, "image/jpeg", 0.6); // calidad reducida
   };
 
   const stopCamera = () => {
